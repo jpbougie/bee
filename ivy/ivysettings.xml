@@ -15,6 +15,12 @@
       <url name="lag.net" m2compatible="true">
         <artifact pattern="http://www.lag.net/repo/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
       </url>
+      <url name="googlecode" m2compatible="false">
+        <artifact pattern="http://[organisation].googlecode.com/files/[artifact]-[revision].[ext]" />
+      </url>
+      <filesystem name="local" m2compatible="true" transactional="false">
+        <artifact pattern="${basedir}/dist/repo/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
+      </filesystem>
     </chain>
     <filesystem name="local" m2compatible="true" transactional="false">
       <artifact pattern="${basedir}/dist/repo/[organisation]/[module]/[revision]/[artifact]-[revision].[ext]" />
