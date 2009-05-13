@@ -1,0 +1,5 @@
+<project name="bee" default="package">
+  <description> Bee: worker framework in scala. </description>
+  <property name="skip.docs" value="true" />
+  <import file="ant/bootstrap.xml" />
+</project>
