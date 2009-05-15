@@ -25,5 +25,6 @@
     <dependency org="org.apache.mina" name="mina-core" rev="2.0.0-M4" />
     <dependency org="org.slf4j" name="slf4j-jdk14" rev="1.5.2" />
     <dependency org="spymemcached" name="memcached" rev="2.3.1" />
+    <dependency org="net.databinder" name="dispatch" rev="0.3.0" />
   </dependencies>
 </ivy-module>
