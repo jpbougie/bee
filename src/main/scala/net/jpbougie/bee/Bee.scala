@@ -32,11 +32,13 @@ import scala.actors.Actor._
 import scala.util.parsing.json.JSON
 
 import java.net.InetSocketAddress
+import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import net.lag.configgy.{Config, ConfigMap, Configgy, RuntimeEnvironment}
 import net.lag.logging.Logger
 
-import net.spy.memcached.MemcachedClient
+import net.spy.memcached.{MemcachedClient, CachedData}
+import net.spy.memcached.transcoders.Transcoder
 import dispatch._
 import dispatch.couch._
 import dispatch.json._
@@ -48,6 +50,22 @@ trait Task {
   def run(params: JsValue): JsValue
   /* identifies the task uniquely, used to find the good queue */
   def identifier: String 
+}
+
+class JsonTranscoder extends Transcoder[JsValue] {
+  def decode(d: CachedData) : JsValue = {
+    var str = new String(d.getData.drop(4)) // drop the first 4 bytes from ruby marshalling
+    Console.println(str)
+    Logger.get.debug(str)
+    Js(str)
+  }
+  
+  def encode(v: JsValue): CachedData = {
+    val bytes = v.toString.getBytes
+    new CachedData(0, bytes, this.getMaxSize)
+  }
+  
+  def getMaxSize = CachedData.MAX_SIZE
 }
 
 
@@ -62,23 +80,25 @@ class Worker(val config: Config, val task: Task) extends Actor {
     
     val addr = new InetSocketAddress(config.getString("memcache.host", "localhost"), config.getInt("memcache.port", 22133))
     val c = new MemcachedClient(addr);
+    val transcoder = new JsonTranscoder
         
     loop {
-      val returned = c.get(task.identifier + "/t=" + config.getInt("wait", 10 * 1000).toString).asInstanceOf[String]
-      if(returned != null) {
-        val result = Js()
-
-        /* extracts the key from the document */
-        val keyExtractor = 'key ? str
-        val keyExtractor(key) = result
-
-        Hive ! Store(key, task.run(result), task)
-      } else {
-        Thread.sleep(10 * 1000)
-      }
+      val future = c.asyncGet(task.identifier + "/t=" + config.getInt("wait", 10 * 1000), transcoder)
       
+      try {
+        val json = future.get(12, TimeUnit.SECONDS)
+        
+        if(json != null) {
+          /* extracts the key from the document */
+          val keyExtractor = 'key ? str
+          val keyExtractor(key) = json
+
+          Hive ! Store(key, task.run(json), task)
+        }
+      } catch {
+          case e:TimeoutException => future.cancel(true);
+      }
     }
-    
   }
 }
 
@@ -92,7 +112,7 @@ object Hive extends Actor {
                         Bee.config.getInt("couchdb.port", 5984))
                     
   val db = Db(couch, Bee.config.getString("couchdb.database", "bee"))
-  http(db create)
+  http.x(db) { (code, _, _) => if(code == 404) { http(db create) } }
   
   start
   
@@ -103,7 +123,13 @@ object Hive extends Actor {
       react {
         case Store(key, data, task) => 
           val doc = Doc(db, key)
-          val docData = http(doc >> { stm => json.Js(stm)})
+          val docData = if(http.x(doc) { (code, _, _) => code == 404}) {
+            Js()
+          }
+          else
+          {
+            http(doc >> { stm => json.Js(stm)})
+          }
           val newData = tag(merge(docData, task, data), task.identifier)
           put(doc, newData)
       }
