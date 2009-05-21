@@ -48,13 +48,15 @@ trait Task {
   /*  the task is executed using this method, which takes a json-unserialized map, and expects a map that can be serialized back*/
   /*  the given map will contain the keyword 'key' along with the key to the object. other elements will be given according to the task*/
   def run(params: JsValue): JsValue
-  /* identifies the task uniquely, used to find the good queue */
-  def identifier: String 
+}
+
+trait Configurable {
+  def setup(config: ConfigMap)
 }
 
 class JsonTranscoder extends Transcoder[JsValue] {
   def decode(d: CachedData) : JsValue = {
-    var str = new String(d.getData.drop(4)) // drop the first 4 bytes from ruby marshalling
+    var str = new String(d.getData.dropWhile(_ != '{')) // drop the first 4 bytes from ruby marshalling
     Console.println(str)
     Logger.get.debug(str)
     Js(str)
@@ -73,17 +75,17 @@ class JsonTranscoder extends Transcoder[JsValue] {
  * A worker waits for a task from the queue and executes it, storing the result in the nest
  * The queue identifies the type of work, and the data contained will be stored as json
  */
-class Worker(val config: Config, val task: Task) extends Actor {
+class Worker(val config: Config, val task: Task, taskName: String) extends Actor {
   //link(Queen)
   def act = {
     trapExit = true
     
-    val addr = new InetSocketAddress(config.getString("memcache.host", "localhost"), config.getInt("memcache.port", 22133))
+    val addr = new InetSocketAddress(config.getString("queue.host", "localhost"), config.getInt("queue.port", 22133))
     val c = new MemcachedClient(addr);
     val transcoder = new JsonTranscoder
         
     loop {
-      val future = c.asyncGet(task.identifier + "/t=" + config.getInt("wait", 10 * 1000), transcoder)
+      val future = c.asyncGet(taskName + "/t=" + config.getInt("wait", 10 * 1000), transcoder)
       
       try {
         val json = future.get(12, TimeUnit.SECONDS)
@@ -93,7 +95,7 @@ class Worker(val config: Config, val task: Task) extends Actor {
           val keyExtractor = 'key ? str
           val keyExtractor(key) = json
 
-          Hive ! Store(key, task.run(json), task)
+          Hive ! Store(key, task.run(json), taskName)
         }
       } catch {
           case e:TimeoutException => future.cancel(true);
@@ -104,7 +106,7 @@ class Worker(val config: Config, val task: Task) extends Actor {
 
 /* The nest will provide the interface for storing and querying the CouchDB instance */
 
-case class Store(val key: String, val data: JsValue, task: Task)
+case class Store(val key: String, val data: JsValue, taskName: String)
 object Hive extends Actor {
   //link(Queen)
   val http = new Http
@@ -130,14 +132,14 @@ object Hive extends Actor {
           {
             http(doc >> { stm => json.Js(stm)})
           }
-          val newData = tag(merge(docData, task, data), task.identifier)
+          val newData = tag(merge(docData, task, data), task)
           put(doc, newData)
       }
     }
   }
   
-  def merge(docData: JsValue, task: Task, data: JsValue): JsValue = {
-    (Symbol(task.identifier) << data)(docData)
+  def merge(docData: JsValue, task: String, data: JsValue): JsValue = {
+    (Symbol(task) << data)(docData)
   }
   
   def tag(docData: JsValue, tag: String): JsValue = {
@@ -183,7 +185,14 @@ object Queen extends Actor {
     
     config.getConfigMap("tasks") match {
       case Some(tasksConfig) => 
-        workers = tasksConfig.keys.map { k => new Worker(config, Class.forName(tasksConfig.configMap(k).getString("class", "")).newInstance.asInstanceOf[Task])}.toList
+        workers = tasksConfig.keys.map { k => 
+          Console.println("Starting " + k + "...")
+          val task = Class.forName(tasksConfig.configMap(k).getString("class", "")).newInstance.asInstanceOf[Task]
+          task match {
+            case t: Configurable => t.setup(tasksConfig.configMap(k))
+            case _ => task
+          }
+          new Worker(config, task, k)}.toList
         for(worker <- workers) {
           worker.start
         }

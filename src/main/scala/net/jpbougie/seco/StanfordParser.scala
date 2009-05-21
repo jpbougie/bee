@@ -17,6 +17,7 @@ class StanfordParser extends Task {
     
     val tree = parser.apply(question)
     
+    System.gc
     toJson(tree)
   }
   
@@ -25,8 +26,13 @@ class StanfordParser extends Task {
     val label = ('label << tree.label.toString)
     val children = ('children << (tree.children.map(toJson(_))))
     
-    score(label(children(Js())))
+    
+    val res = score(label(Js()))
+    
+    if(tree.children.length > 0) {
+      children(res)
+    } else {
+      res
+    }
   }
-  
-  def identifier = "stanford"
 }
