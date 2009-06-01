@@ -76,7 +76,7 @@ class JsonTranscoder extends Transcoder[JsValue] {
  * The queue identifies the type of work, and the data contained will be stored as json
  */
 class Worker(val config: Config, val task: Task, taskName: String) extends Actor {
-  //link(Queen)
+
   def act = {
     trapExit = true
     
@@ -95,10 +95,15 @@ class Worker(val config: Config, val task: Task, taskName: String) extends Actor
           val keyExtractor = 'key ? str
           val keyExtractor(key) = json
 
-          Hive ! Store(key, task.run(json), taskName)
+          val startTime = System.currentTimeMillis
+          val result = task.run(json)
+          val elapsedTime = (System.currentTimeMillis - startTime)
+          
+          Hive ! Store(key, task.run(json), taskName, elapsedTime)
         }
       } catch {
           case e:TimeoutException => future.cancel(true);
+          case e => Logger.get.error("Worker encountered an exception, %s", e.toString)
       }
     }
   }
@@ -106,7 +111,7 @@ class Worker(val config: Config, val task: Task, taskName: String) extends Actor
 
 /* The nest will provide the interface for storing and querying the CouchDB instance */
 
-case class Store(val key: String, val data: JsValue, taskName: String)
+case class Store(val key: String, val data: JsValue, taskName: String, elapsedTime: Long)
 object Hive extends Actor {
   //link(Queen)
   val http = new Http
@@ -123,7 +128,7 @@ object Hive extends Actor {
     
     loop {
       react {
-        case Store(key, data, task) => 
+        case Store(key, data, task, elapsedTime) => 
           val doc = Doc(db, key)
           val docData = if(http.x(doc) { (code, _, _) => code == 404}) {
             Js()
@@ -132,7 +137,7 @@ object Hive extends Actor {
           {
             http(doc >> { stm => json.Js(stm)})
           }
-          val newData = tag(merge(docData, task, data), task)
+          val newData = tag(merge(docData, task, data), task, elapsedTime)
           put(doc, newData)
       }
     }
@@ -142,14 +147,21 @@ object Hive extends Actor {
     (Symbol(task) << data)(docData)
   }
   
-  def tag(docData: JsValue, tag: String): JsValue = {
-    val tagsEx = 'tags ? list
-    /* TODO: check if the tags is already there */
-    val tags = JsString(tag) :: (docData match {
-                  case tagsEx(tags) => tags
-                  case _ => Nil
+  def tag(docData: JsValue, tag: String, elapsedTime : Long): JsValue = {
+    /* Tagging a document with a task adds it to a special object
+     * in the document named 'tasks', which contains for each task successfully completed,
+     * the task name as a key and another object with details about the execution.
+     * the duration of the task is the only parameter right now, and is given in milliseconds
+     */
+    val tasksEx = 'tasks ? obj
+
+    val old = (docData match {
+                  case tasksEx(tasks) => tasks
+                  case _ => Js()
                 })
-    ('tags << tags)(docData)
+    val newTag = ('duration << elapsedTime)(Js())
+    val tags = (Symbol(tag) << newTag)(old)
+    ('tasks << tags)(docData)
   }
   
   def put(document: Doc, newContent: JsValue): Unit = {
