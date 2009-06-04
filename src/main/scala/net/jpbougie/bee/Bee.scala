@@ -57,7 +57,6 @@ trait Configurable {
 class JsonTranscoder extends Transcoder[JsValue] {
   def decode(d: CachedData) : JsValue = {
     var str = new String(d.getData.dropWhile(_ != '{')) // drop the first 4 bytes from ruby marshalling
-    Console.println(str)
     Logger.get.debug(str)
     Js(str)
   }
@@ -99,7 +98,7 @@ class Worker(val config: Config, val task: Task, taskName: String) extends Actor
           val result = task.run(json)
           val elapsedTime = (System.currentTimeMillis - startTime)
           
-          Hive ! Store(key, task.run(json), taskName, elapsedTime)
+          Hive ! Store(key, result, taskName, elapsedTime)
         }
       } catch {
           case e:TimeoutException => future.cancel(true);
