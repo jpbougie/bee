@@ -129,13 +129,11 @@ object Hive extends Actor {
       react {
         case Store(key, data, task, elapsedTime) => 
           val doc = Doc(db, key)
-          val docData = if(http.x(doc) { (code, _, _) => code == 404}) {
-            Js()
-          }
-          else
-          {
-            http(doc >> { stm => json.Js(stm)})
-          }
+          val docData = http.x(doc) { 
+              case (404, _, _ ) => Js()
+              case (status, req, None) => Js()
+              case (status, req, Some(ent)) => Js(ent.getContent)
+            }
           val newData = tag(merge(docData, task, data), task, elapsedTime)
           put(doc, newData)
       }
