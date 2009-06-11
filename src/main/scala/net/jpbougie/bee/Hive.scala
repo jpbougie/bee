@@ -68,18 +68,21 @@ object Hive extends Actor {
       react {
         case Store(queue, key, data) => 
           val doc = Doc(db, key)
-          val docData = http.x(doc) { 
-              case (404, _, _ ) => Js()
-              case (status, req, None) => Js()
-              case (status, req, Some(ent)) => Js(ent.getContent)
-            }
+          val docData = fetch(doc).getOrElse(Js())
           val newData = merge(docData, queue, data)
           put(doc, newData)
-        case Get(queue, key) =>
-          val doc = Doc(db, key)
-          reply(http(doc >> { stm => json.Js(stm)}))
+        case Get(queue, key) => 
+          val doc = fetch(Doc(db, key))
+          reply(doc map { d => (Symbol(queue) ! obj)(d) })
       }
     }
+  }
+  
+  def fetch(doc: Doc): Option[JsValue] = {
+    http.x(doc) { 
+        case (404, _, _ ) => None
+        case (status, req, ent) => ent map { entity => Js(entity.getContent) }
+      }
   }
   
   def merge(docData: JsValue, task: String, data: Map[String, ExecutionProfile]): JsValue = {

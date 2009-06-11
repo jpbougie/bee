@@ -74,7 +74,10 @@ class Worker(val config: Config, val tasks: Seq[Task], queueName: String) extend
           val previousDocumentF = Hive !! Get(queueName, key)
           
           /* takes the JSON object and transform it into a map[String, ExecutionProfile] */
-          val previousDocument = Map.empty ++ previousDocumentF().asInstanceOf[JsObject].self.map { case (JsString(k), v) => k -> ExecutionProfile.fromJson(v) }
+          val previousDocument = Map.empty ++ previousDocumentF().asInstanceOf[Option[JsObject]].map {
+                                              o =>
+                                                o.self.map { case (JsString(k), v) => k -> ExecutionProfile.fromJson(v.asInstanceOf[JsObject]) }
+                                              }.getOrElse(Map.empty)
           
           /* check if the input is really the same, start over otherwise */
           val initial = if(previousDocument.contains("input") && previousDocument("input").result == Some(request)) {
@@ -113,7 +116,7 @@ class Worker(val config: Config, val tasks: Seq[Task], queueName: String) extend
         }
       } catch {
           case e:TimeoutException => future.cancel(true);
-          case e => Logger.get.error("Worker encountered an exception, %s", e.toString)
+          //case e => Logger.get.error("Worker encountered an exception, %s", e.toString)
       }
     }
   }

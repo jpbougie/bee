@@ -74,7 +74,7 @@ class JsonTranscoder extends Transcoder[JsValue] {
 
 case class ExecutionProfile(val result: Option[JsValue], val duration: BigDecimal, val errors: List[String]) {
   def toJson = {
-    val res = 'result << result.getOrElse(() => { Js() }) 
+    val res = 'result << result.getOrElse(Js()) 
     val dur = 'duration << duration
     val errs = 'errors << errors
     
@@ -83,9 +83,9 @@ case class ExecutionProfile(val result: Option[JsValue], val duration: BigDecima
 }
 
 case object ExecutionProfile {
-  def fromJson(js: JsValue): ExecutionProfile = {
-    %('result ! obj, 'duration ! num, 'errors ! (list ! str))(js) match {
-      case (result, duration, errors) => ExecutionProfile(Some(result), duration, errors)
+  def fromJson(js: JsObject): ExecutionProfile = {
+    %('duration ! num, 'errors ! (list ! str))(js) match {
+      case (duration, errors) => ExecutionProfile(Some(js.self.apply(JsString("result"))), duration, errors)
     }
   }
 }

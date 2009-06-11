@@ -3,6 +3,7 @@ package net.jpbougie.bee.examples
 import dispatch._
 import dispatch.json._
 import Js._
+import net.lag.logging.Logger
 
 class Double extends Task {
   def run(params: Map[String, ExecutionProfile]): JsValue = {
