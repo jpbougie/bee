@@ -11,6 +11,8 @@ import edu.stanford.nlp.trees.Tree
 class StanfordParser extends Task {
   val parser = new LexicalizedParser("englishPCFG.ser.gz")
   
+  override def identifier = "stanford"
+  
   def run(params: Map[String, ExecutionProfile]): JsValue = {
     val linex = 'question ? str
     val linex(question) = params("input").result.get

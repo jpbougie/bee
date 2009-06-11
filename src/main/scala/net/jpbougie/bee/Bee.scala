@@ -72,16 +72,21 @@ class JsonTranscoder extends Transcoder[JsValue] {
   def getMaxSize = CachedData.MAX_SIZE
 }
 
-case class ExecutionProfile(val result: Option[JsValue], val duration: Long, val errors: List[String]) {
+case class ExecutionProfile(val result: Option[JsValue], val duration: BigDecimal, val errors: List[String]) {
   def toJson = {
-    val res = ('result << result)
-    val dur = ('duration << duration)
-    val errs = errors match {
-      case Nil => Js()
-      case _   => ('errors << errors)(Js())
-    }
+    val res = 'result << result.getOrElse(() => { Js() }) 
+    val dur = 'duration << duration
+    val errs = 'errors << errors
     
-    res(dur(errs))
+    res(dur(errs(Js())))
+  }
+}
+
+case object ExecutionProfile {
+  def fromJson(js: JsValue): ExecutionProfile = {
+    %('result ! obj, 'duration ! num, 'errors ! (list ! str))(js) match {
+      case (result, duration, errors) => ExecutionProfile(Some(result), duration, errors)
+    }
   }
 }
 

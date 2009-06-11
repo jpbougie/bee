@@ -70,24 +70,43 @@ class Worker(val config: Config, val tasks: Seq[Task], queueName: String) extend
           val keyExtractor = 'key ? str
           val keyExtractor(key) = request
           
+          /* fetches the previously stored document if it exists */
+          val previousDocumentF = Hive !! Get(queueName, key)
+          
+          /* takes the JSON object and transform it into a map[String, ExecutionProfile] */
+          val previousDocument = Map.empty ++ previousDocumentF().asInstanceOf[JsObject].self.map { case (JsString(k), v) => k -> ExecutionProfile.fromJson(v) }
+          
+          /* check if the input is really the same, start over otherwise */
+          val initial = if(previousDocument.contains("input") && previousDocument("input").result == Some(request)) {
+            previousDocument
+          } else {
+            Map("input" -> ExecutionProfile(Some(request), 0, Nil))
+          }
           /* 
            * Executes each task in the chain, storing the results as an execution profile 
            * in the map that will be stored. The first element is always going to be called input,
            * and will contain the parameters that were received from the queue.
            */
-          val map: Map[String, ExecutionProfile] = tasks.foldLeft(Map("input" -> ExecutionProfile(Some(request), 0, Nil))) {  (data, task) =>
-            val startTime = System.currentTimeMillis
-            val output = try {
-              val result = task.run(data)
-              (Some(result), Nil)
-            } 
-            catch {
-              case e : Exception => (None, e.toString :: Nil)
-            }
-            val elapsedTime = System.currentTimeMillis - startTime
+          val map: Map[String, ExecutionProfile] = tasks.foldLeft(initial) {  (data, task) =>
             
-            /* add the new data to the map */
-            data + (task.identifier -> ExecutionProfile(output._1, elapsedTime, output._2))
+            /* no need to re-run an already successfully completed task */
+            if(data.contains(task.identifier) && data(task.identifier).errors == Nil) {
+              data
+            } else {
+              val startTime = System.currentTimeMillis
+              val output = try {
+                val result = task.run(data)
+                (Some(result), Nil)
+              } 
+              catch {
+                case e : Exception => (None, e.toString :: Nil)
+              }
+              val elapsedTime = System.currentTimeMillis - startTime
+
+              /* add the new data to the map */
+              data + (task.identifier -> ExecutionProfile(output._1, elapsedTime, output._2))
+            }
+            
           }
           
           Hive ! Store(queueName, key, map)

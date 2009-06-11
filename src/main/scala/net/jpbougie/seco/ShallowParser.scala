@@ -116,4 +116,6 @@ class ShallowParser extends Task with Configurable {
       case _ => Js()
     }
   }
+  
+  override def identifier = "shallow"
 }

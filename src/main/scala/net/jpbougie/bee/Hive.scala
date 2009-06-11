@@ -47,7 +47,8 @@ import dispatch.json._
 import Js._
 
 /* The hive will provide the interface for storing and querying the CouchDB instance */
-case class Store(queueName: String, val key: String, val data: Map[String, ExecutionProfile])
+case class Store(val queueName: String, val key: String, val data: Map[String, ExecutionProfile])
+case class Get(val queueName: String, val key: String)
 object Hive extends Actor {
   val http = new Http
   val couch = new Couch(Bee.config.getString("couchdb.host", "localhost"),
@@ -74,6 +75,9 @@ object Hive extends Actor {
             }
           val newData = merge(docData, queue, data)
           put(doc, newData)
+        case Get(queue, key) =>
+          val doc = Doc(db, key)
+          reply(http(doc >> { stm => json.Js(stm)}))
       }
     }
   }
