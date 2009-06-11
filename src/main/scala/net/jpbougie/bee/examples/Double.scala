@@ -5,12 +5,12 @@ import dispatch.json._
 import Js._
 
 class Double extends Task {
-  def run(params: JsValue): JsValue = {
+  def run(params: Map[String, ExecutionProfile]): JsValue = {
     val numx = 'num ? num
-    val numx(x) = params
+    val numx(x) = params("input").result.get
     
     JsNumber(x * 2)
   }
   
-  def identifier = "double"
+  override def identifier = "double"
 }

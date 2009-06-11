@@ -1,6 +1,6 @@
 package net.jpbougie.seco
 
-import net.jpbougie.bee.Task
+import net.jpbougie.bee.{Task, ExecutionProfile}
 
 import dispatch._
 import dispatch.json._
@@ -11,9 +11,9 @@ import edu.stanford.nlp.trees.Tree
 class StanfordParser extends Task {
   val parser = new LexicalizedParser("englishPCFG.ser.gz")
   
-  def run(params: JsValue): JsValue = {
+  def run(params: Map[String, ExecutionProfile]): JsValue = {
     val linex = 'question ? str
-    val linex(question) = params
+    val linex(question) = params("input").result.get
     
     val tree = parser.apply(question)
     

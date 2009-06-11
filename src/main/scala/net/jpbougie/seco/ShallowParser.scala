@@ -1,6 +1,6 @@
 package net.jpbougie.seco
 
-import net.jpbougie.bee.{Task, Configurable}
+import net.jpbougie.bee.{Task, ExecutionProfile, Configurable}
 
 import dispatch._
 import dispatch.json._
@@ -83,10 +83,10 @@ class ShallowParser extends Task with Configurable {
     this.scriptPath = config.getString("script_path", "parser.py")
   }
   
-  def run(params: JsValue): JsValue = {
+  def run(params: Map[String, ExecutionProfile]): JsValue = {
     logger.info("Running the shallow parser")
     val linex = 'question ? str
-    val linex(question) = params
+    val linex(question) = params("input").result.get
     
     logger.debug("Input : %s", question)
     

@@ -31,6 +31,8 @@ import scala.actors.{Actor, Exit}
 import scala.actors.Actor._
 import scala.util.parsing.json.JSON
 
+import scala.collection.immutable.Map
+
 import java.net.InetSocketAddress
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
@@ -47,7 +49,8 @@ import Js._
 trait Task {
   /*  the task is executed using this method, which takes a json-unserialized map, and expects a map that can be serialized back*/
   /*  the given map will contain the keyword 'key' along with the key to the object. other elements will be given according to the task*/
-  def run(params: JsValue): JsValue
+  def run(params: Map[String, ExecutionProfile]): JsValue
+  def identifier: String = { this.getClass.getName.toLowerCase }
 }
 
 trait Configurable {
@@ -69,102 +72,19 @@ class JsonTranscoder extends Transcoder[JsValue] {
   def getMaxSize = CachedData.MAX_SIZE
 }
 
-
-/* 
- * A worker waits for a task from the queue and executes it, storing the result in the nest
- * The queue identifies the type of work, and the data contained will be stored as json
- */
-class Worker(val config: Config, val task: Task, taskName: String) extends Actor {
-
-  def act = {
-    trapExit = true
-    
-    val addr = new InetSocketAddress(config.getString("queue.host", "localhost"), config.getInt("queue.port", 22133))
-    val c = new MemcachedClient(addr);
-    val transcoder = new JsonTranscoder
-        
-    loop {
-      val future = c.asyncGet(taskName + "/t=" + config.getInt("wait", 10 * 1000), transcoder)
-      
-      try {
-        val json = future.get(12, TimeUnit.SECONDS)
-        
-        if(json != null) {
-          /* extracts the key from the document */
-          val keyExtractor = 'key ? str
-          val keyExtractor(key) = json
-
-          val startTime = System.currentTimeMillis
-          val result = task.run(json)
-          val elapsedTime = (System.currentTimeMillis - startTime)
-          
-          Hive ! Store(key, result, taskName, elapsedTime)
-        }
-      } catch {
-          case e:TimeoutException => future.cancel(true);
-          case e => Logger.get.error("Worker encountered an exception, %s", e.toString)
-      }
+case class ExecutionProfile(val result: Option[JsValue], val duration: Long, val errors: List[String]) {
+  def toJson = {
+    val res = ('result << result)
+    val dur = ('duration << duration)
+    val errs = errors match {
+      case Nil => Js()
+      case _   => ('errors << errors)(Js())
     }
+    
+    res(dur(errs))
   }
 }
 
-/* The nest will provide the interface for storing and querying the CouchDB instance */
-
-case class Store(val key: String, val data: JsValue, taskName: String, elapsedTime: Long)
-object Hive extends Actor {
-  //link(Queen)
-  val http = new Http
-  val couch = new Couch(Bee.config.getString("couchdb.host", "localhost"),
-                        Bee.config.getInt("couchdb.port", 5984))
-                    
-  val db = Db(couch, Bee.config.getString("couchdb.database", "bee"))
-  http.x(db) { (code, _, _) => if(code == 404) { http(db create) } }
-  
-  start
-  
-  def act = {
-    trapExit = true
-    
-    loop {
-      react {
-        case Store(key, data, task, elapsedTime) => 
-          val doc = Doc(db, key)
-          val docData = http.x(doc) { 
-              case (404, _, _ ) => Js()
-              case (status, req, None) => Js()
-              case (status, req, Some(ent)) => Js(ent.getContent)
-            }
-          val newData = tag(merge(docData, task, data), task, elapsedTime)
-          put(doc, newData)
-      }
-    }
-  }
-  
-  def merge(docData: JsValue, task: String, data: JsValue): JsValue = {
-    (Symbol(task) << data)(docData)
-  }
-  
-  def tag(docData: JsValue, tag: String, elapsedTime : Long): JsValue = {
-    /* Tagging a document with a task adds it to a special object
-     * in the document named 'tasks', which contains for each task successfully completed,
-     * the task name as a key and another object with details about the execution.
-     * the duration of the task is the only parameter right now, and is given in milliseconds
-     */
-    val tasksEx = 'tasks ? obj
-
-    val old = (docData match {
-                  case tasksEx(tasks) => tasks
-                  case _ => Js()
-                })
-    val newTag = ('duration << elapsedTime)(Js())
-    val tags = (Symbol(tag) << newTag)(old)
-    ('tasks << tags)(docData)
-  }
-  
-  def put(document: Doc, newContent: JsValue): Unit = {
-    http(document.update(newContent))
-  }
-}
 
 
 case class Load(config: Config)
@@ -201,7 +121,7 @@ object Queen extends Actor {
             case t: Configurable => t.setup(tasksConfig.configMap(k))
             case _ => task
           }
-          new Worker(config, task, k)}.toList
+          new Worker(config, task :: Nil, k)}.toList
         for(worker <- workers) {
           worker.start
         }
