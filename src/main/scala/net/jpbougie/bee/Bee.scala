@@ -104,7 +104,7 @@ object Queen extends Actor {
     loop {
       react {
         case Load(config) => load(config)
-        case Exit(from, reason) => restart(from.asInstanceOf[Worker])
+        case Exit(from: Worker, reason) => restart(from)
       }
     }
   }
@@ -112,22 +112,29 @@ object Queen extends Actor {
   def load(config: Config): Unit = {
     this.config = config
     
-    config.getConfigMap("tasks") match {
-      case Some(tasksConfig) => 
-        workers = tasksConfig.keys.map { k => 
-          Console.println("Starting " + k + "...")
-          val task = Class.forName(tasksConfig.configMap(k).getString("class", "")).newInstance.asInstanceOf[Task]
-          task match {
-            case t: Configurable => t.setup(tasksConfig.configMap(k))
-            case _ => task
-          }
-          new Worker(config, task :: Nil, k)}.toList
-        for(worker <- workers) {
-          worker.start
-        }
-        workers
+    config.getConfigMap("chains") match {
+      case Some(chainsConfig) => 
+        workers = chainsConfig.keys.map { k => 
+          Logger.get.info("Starting " + k + "...")
+          val conf = chainsConfig.getConfigMap(k).get
+          val tasksList = conf.getList("chain")
+          val tasks = tasksList.map {t:String => loadTask(conf.getConfigMap(t).get)}
+          val w = new Worker(config, tasks, k)
+          w.start
+          w
+        }.toList
       case None => Nil
     }
+  }
+  
+  def loadTask(conf: ConfigMap): Task = {
+    val task = Class.forName(conf.getString("class", "")).newInstance.asInstanceOf[Task]
+    task match {
+      case t: Configurable => t.setup(conf)
+      case _ => task
+    }
+    
+    task
   }
   
   def restart(worker: Worker) = {

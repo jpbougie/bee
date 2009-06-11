@@ -51,7 +51,7 @@ import Js._
  * A worker waits for a task, or a list of tasks from the queue and executes it, storing the result in the nest
  * The queue identifies the type of work, and the data contained will be stored as json
  */
-class Worker(val config: Config, val tasks: List[Task], queueName: String) extends Actor {
+class Worker(val config: Config, val tasks: Seq[Task], queueName: String) extends Actor {
 
   def act = {    
     val addr = new InetSocketAddress(config.getString("queue.host", "localhost"), config.getInt("queue.port", 22133))
