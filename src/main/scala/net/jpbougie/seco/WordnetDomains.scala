@@ -37,7 +37,7 @@ class WordnetDomains extends Task with Configurable {
     // where xxxxxxxx is the offset, t is the type, dddd are domains
     // we only keep the 'n' type (for nouns)
     val it = source.getLines.filter(_(9) == 'n')
-                            .map(l => (l.take(8).toInt, l.split("\t").last.split(" ")))
+                            .map(l => (l.take(8).toInt, l.stripLineEnd.split("\t").last.split(" ")))
                             
     this.domainMap = IntMap.empty ++ new Iterable[(Int, Array[String])] { def elements = it } 
   }
