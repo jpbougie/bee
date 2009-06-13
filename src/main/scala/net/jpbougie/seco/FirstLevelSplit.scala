@@ -40,21 +40,21 @@ class FirstLevelSplit extends Task {
     val tree = skipUniqueChild(Tree.fromJson(params("stanford").result.get), 2)
     
     val objects = tree match {
-      case Node(label, children) => children.map(findNouns(_))
-      case Leaf(label, value) => (label :: Nil) :: Nil
-    } 
+      case Node(label, children) => children.map(findNouns(_)).toList
+      case Leaf(label, value) => (value :: Nil) :: Nil
+    }
        
-    JsArray(objects.map(l => { JsArray(l.map(JsString(_)).toList)}).toList)
+    JsArray(objects.remove(_ isEmpty).map(l => { JsArray(l.map(JsString(_)).toList)}).toList)
   }
   
   /**
    * This function will take a tree and extract the leaves that are nouns (labels NN, NNS, NNP, NNPS)
    */
-  def findNouns(tree : Tree): Seq[String] = {
+  def findNouns(tree : Tree): List[String] = {
     tree match {
       case Leaf(label, value) if List("NN", "NNS", "NNP", "NNPS").contains(label) => value :: Nil
       case Leaf(_, _) => Nil
-      case Node(_, children) => children.flatMap(findNouns(_))
+      case Node(_, children) => children.flatMap(findNouns(_)).toList
     }
   }
   
