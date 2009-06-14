@@ -80,11 +80,15 @@ class WordnetDomains extends Task with Configurable {
         yield domain
     }
     
-    var domains = for(domain <- objects)
-                    yield for(obj <- domain) 
-                      yield getDomains(obj)
+    var domains = for(domain <- objects) yield domain.flatMap(getDomains(_))
+                      
+    // extract the frequency of each domain, sort them by frequency
     
-    JsArray(domains.map(d => { JsArray(d.map(JsString(_))) }))
+    var sortedDomains = for(domain <- domains)
+                          yield domain.foldLeft(Map[String, Int]().withDefaultValue(0))
+                                                { (map: Map[String, Int], obj: String) => map + (obj -> (map(obj) + 1))}.toList.sort(_._2 > _._2).map(_._1)
+    
+    JsArray(sortedDomains.map(d => { JsArray(d.map(JsString(_))) }))
   }
   
 }
