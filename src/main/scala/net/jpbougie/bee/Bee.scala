@@ -51,6 +51,7 @@ trait Task {
   /*  the given map will contain the keyword 'key' along with the key to the object. other elements will be given according to the task*/
   def run(params: Map[String, ExecutionProfile]): JsValue
   def identifier: String = { this.getClass.getName.toLowerCase }
+  def version: String = "1"
 }
 
 trait Configurable {
@@ -72,20 +73,21 @@ class JsonTranscoder extends Transcoder[JsValue] {
   def getMaxSize = CachedData.MAX_SIZE
 }
 
-case class ExecutionProfile(val result: Option[JsValue], val duration: BigDecimal, val errors: List[String]) {
+case class ExecutionProfile(val result: Option[JsValue], val duration: BigDecimal, val errors: List[String], val version: String) {
   def toJson = {
     val res = 'result << result.getOrElse(Js()) 
     val dur = 'duration << duration
     val errs = 'errors << errors
+    val vers = 'version << version
     
-    res(dur(errs(Js())))
+    vers(res(dur(errs(Js()))))
   }
 }
 
 case object ExecutionProfile {
   def fromJson(js: JsObject): ExecutionProfile = {
-    %('duration ! num, 'errors ! (list ! str))(js) match {
-      case (duration, errors) => ExecutionProfile(Some(js.self.apply(JsString("result"))), duration, errors)
+    %('duration ! num, 'errors ! (list ! str), 'version ! str)(js) match {
+      case (duration, errors, version) => ExecutionProfile(Some(js.self.apply(JsString("result"))), duration, errors, version)
     }
   }
 }
