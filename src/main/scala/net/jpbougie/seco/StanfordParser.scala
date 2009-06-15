@@ -12,6 +12,7 @@ class StanfordParser extends Task {
   val parser = new LexicalizedParser("englishPCFG.ser.gz")
   
   override def identifier = "stanford"
+  override def version = "1"
   
   def run(params: Map[String, ExecutionProfile]): JsValue = {
     val linex = 'question ? str

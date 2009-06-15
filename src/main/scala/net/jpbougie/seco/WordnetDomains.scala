@@ -25,6 +25,7 @@ class WordnetDomains extends Task with Configurable {
   var synsetsMap: Map[String, Seq[Int]] = Map.empty
   
   override def identifier = "wordnet-" + this.applyTo
+  override def version = "1"
   
   def setup(config: ConfigMap) = {
     this.applyTo = config.getString("apply_to", "")

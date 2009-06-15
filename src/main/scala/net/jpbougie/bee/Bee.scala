@@ -51,7 +51,7 @@ trait Task {
   /*  the given map will contain the keyword 'key' along with the key to the object. other elements will be given according to the task*/
   def run(params: Map[String, ExecutionProfile]): JsValue
   def identifier: String = { this.getClass.getName.toLowerCase }
-  def version: String = "1"
+  def version: String = { "1" }
 }
 
 trait Configurable {

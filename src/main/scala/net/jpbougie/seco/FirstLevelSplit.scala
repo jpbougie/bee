@@ -34,6 +34,7 @@ class FirstLevelSplit extends Task {
   }
   
   override def identifier = "firstlevelsplit"
+  override def version = "1"
   
   def run(params: Map[String, ExecutionProfile]): JsValue = {
     
