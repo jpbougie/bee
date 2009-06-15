@@ -90,12 +90,16 @@ class Worker(val config: Config, val tasks: Seq[Task], queueName: String) extend
            * in the map that will be stored. The first element is always going to be called input,
            * and will contain the parameters that were received from the queue.
            */
+          var versionChange = false
           val map: Map[String, ExecutionProfile] = tasks.foldLeft(initial) {  (data, task) =>
             
             /* no need to re-run an already successfully completed task */
+            if(data.contains(task.identifier) && !data(task.identifier).version.equals(task.version)) {
+              versionChange = true
+            }
             if(data.contains(task.identifier) && 
                data(task.identifier).errors == Nil && 
-               data(task.identifier).version == task.version) {
+               !versionChange) {
               data
             } else {
               val startTime = System.currentTimeMillis
