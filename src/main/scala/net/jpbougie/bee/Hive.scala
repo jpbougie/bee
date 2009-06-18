@@ -73,7 +73,7 @@ object Hive extends Actor {
           put(doc, newData)
         case Get(queue, key) => 
           val doc = fetch(Doc(db, key))
-          reply(doc map { d => (Symbol(queue) ! obj)(d) })
+          reply(doc.flatMap({d => Property(Symbol(queue), obj).unapply(d)}))
       }
     }
   }
