@@ -12,27 +12,6 @@ import Js._
  */
 class FirstLevelSplit extends Task {
   
-  /* move the JSON tree to a more compact representation */
-  abstract case class Tree()
-  case class Node(label: String, children: Seq[Tree]) extends Tree
-  case class Leaf(label: String, value: String) extends Tree
-  
-  case object Tree {
-    def fromJson(js: JsValue): Tree = {
-      val children = ('children ! list)
-      val label = ('label ! str)
-      val score = ('score ! num)
-      
-      /* Trees always end with a node whose unique child has a 0 score */
-      val ch = children(js)
-      if(ch.length == 1 && score(ch.first) == 0) {
-        Leaf(label(js), label(ch.first))
-      } else {
-        Node(label(js), ch.map(fromJson(_)))
-      }
-    }
-  }
-  
   override def identifier = "firstlevelsplit"
   override def version = "1"
   
