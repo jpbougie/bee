@@ -23,7 +23,7 @@ class ParseStats extends Task {
                                              ('number_of_nodes << tree.nodes.length) ::
                                              ('number_of_leaves << tree.leaves.length) ::
                                              ('avg_children << (0 /: tree.nodes)(_ + _.children.length) / tree.nodes.length.asInstanceOf[Double] ) ::
-                                             ('avg_children << (0 /: tree.nodes) { (m, n) => Math.max(m, n.children.length) } / tree.nodes.length.asInstanceOf[Double] ) ::
+                                             ('max_children << (0 /: tree.nodes) { (m, n) => Math.max(m, n.children.length) } ) ::
                                              ('number_of_nouns << tree.leaves.filter(isNoun(_)).length) ::
                                              ('number_of_subjonctives << tree.nodes.filter(_.label.equals("IN"))) ::
                                              Nil
