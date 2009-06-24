@@ -75,7 +75,7 @@ class WordnetDomains extends Task with Configurable {
         }
     }
     
-    var expandedParts = parts.map { obj => obj.map(wordnet.getDomains(_)) }
+    var expandedParts = parts.map { obj => obj.map(wordnet.nouns.getDomains(_)) }
     
     val partsWithMaps = expandedParts.map { part => (part, tf(part), idf(part)) }
     
