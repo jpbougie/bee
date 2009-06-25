@@ -2,10 +2,7 @@ package net.jpbougie.seco.utils
 
 import scala.io.Source
 import scala.collection.immutable.{IntMap, Map, Set}
-
-import edu.smu.tspell.wordnet._
-import edu.smu.tspell.wordnet.impl.file.Morphology
-import edu.smu.tspell.wordnet.impl.file.synset._
+import scala.util.matching.Regex
 
 class WordnetParser(wordnetDir: String, domainsFile: String) {
   def parseIndex(pos: String): Map[String, List[Int]] = {
@@ -55,15 +52,15 @@ abstract case class PartOfSpeech() {
   def synsets: Map[String, List[Int]]
   def domains: IntMap[Array[String]]
   def exceptions: Map[String, String]
-  def detachmentRules: Map[String, String]
+  def detachmentRules: Map[Regex, String]
   
   // Returns the list of domains for each sense of a word
   def getDomains(word: String): List[List[String]] = {
     
     // get possible variations on a word, as a plural or a singular, and then sanitize them
-    val words = ((word :: Nil) ++ Morphology.getInstance.getBaseFormCandidates(word, SynsetType.NOUN)
-                                                       .filter(x => !(x equals word)))
-                                  .map { _.toLowerCase.replaceAll(" ", "_") }
+    val words = ((word :: Nil) ++ this.getBaseForms(word)
+                                      .filter(x => !(x equals word)))
+                                      .map { _.toLowerCase.replaceAll(" ", "_") }
     
     for(w <- words if this.synsets contains w; // for each variation that actually exists in the dictionary
         offset <- this.synsets(w)) // get the senses of the word
@@ -73,8 +70,8 @@ abstract case class PartOfSpeech() {
   
   def getBaseForms(word: String): List[String] = {
     exceptions.get(word).toList ++ 
-    detachmentRules.filter({case (pattern, _) => word.matches(pattern) })
-                   .map({ case (pattern, value) => word.replaceFirst(pattern, value) })
+    detachmentRules.filter({case (pattern, _) => pattern.findFirstIn(word).isDefined })
+                   .map({ case (pattern, value) => pattern.replaceFirstIn(word, value) })
   }
 }
 
@@ -87,14 +84,14 @@ case class Noun(parser: WordnetParser) extends PartOfSpeech {
   private val _excs = parser.parseExceptions("noun")
   override def exceptions = _excs
   
-  override def detachmentRules = Map(  "ses$" -> "s"
-                                    ,  "xes$" -> "x"
-                                    ,  "zes$" -> "z"
-                                    , "ches$" -> "ch"
-                                    , "shes$" -> "sh"
-                                    ,  "men$" -> "man"
-                                    ,  "ies$" -> "y"
-                                    ,    "s$" -> ""
+  override def detachmentRules = Map( new Regex("ses$")  -> "s"
+                                    , new Regex("xes$")  -> "x"
+                                    , new Regex("zes$")  -> "z"
+                                    , new Regex("ches$") -> "ch"
+                                    , new Regex("shes$") -> "sh"
+                                    , new Regex("men$")  -> "man"
+                                    , new Regex("ies$")  -> "y"
+                                    , new Regex("s$")    -> ""
                                     )
 }
 
@@ -106,21 +103,19 @@ case class Verb(parser: WordnetParser) extends PartOfSpeech {
   private val _excs = parser.parseExceptions("verb")
   override def exceptions = _excs
   
-  override def detachmentRules = Map( "ies$" -> "y"
-                                    ,  "es$" -> "e"
-                                    ,  "es$" -> ""
-                                    ,  "ed$" -> "e"
-                                    ,  "ed$" -> ""
-                                    , "ing$" -> "e"
-                                    , "ing$" -> ""
-                                    ,   "s$" -> ""
+  override def detachmentRules = Map( new Regex("ies$") -> "y"
+                                    , new Regex("es$")  -> "e"
+                                    , new Regex("es$")  -> ""
+                                    , new Regex("ed$")  -> "e"
+                                    , new Regex("ed$")  -> ""
+                                    , new Regex("ing$") -> "e"
+                                    , new Regex("ing$") -> ""
+                                    , new Regex("s$")   -> ""
                                     )
 }
 
 class Wordnet(wordnetDir: String, domainsFile: String) {
   val parser = new WordnetParser(wordnetDir, domainsFile)
-
-  System.setProperty("wordnet.database.dir", wordnetDir)
 
   val nouns = Noun(parser)
   val verbs = Verb(parser)
