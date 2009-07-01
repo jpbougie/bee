@@ -3,6 +3,23 @@ package net.jpbougie.seco
 import dispatch._
 import dispatch.json._
 import Js._
+case class Part(phrase: String, objects: List[(String, String)]) {
+  def toJson: JsValue = {
+    ('part << phrase)(('objects << (objects.map({ obj => ('type << obj._1)(('value << obj._2)(Js()))})))(Js()))
+  }
+  
+}
+
+object Part {
+  def fromJson(js: JsValue): Part = {
+    val part = ('part ! str)
+    val objects = ('objects ! (list ! obj))
+    
+    
+    
+    Part(part(js), objects(js).map { obj => (('type ! str)(obj), ('value ! str)(obj))})
+  }
+}
 
 abstract case class Tree() {
   def depth: Int = {
@@ -31,16 +48,16 @@ case class Leaf(label: String, value: String) extends Tree
 
 case object Tree {
   def fromJson(js: JsValue): Tree = {
-    val children = ('children ! list)
+    val children = ('children ? list)
     val label = ('label ! str)
     val score = ('score ! num)
     
     /* Trees always end with a node whose unique child has a 0 score */
-    val ch = children(js)
-    if(ch.length == 1 && score(ch.first) == 0) {
-      Leaf(label(js), label(ch.first))
-    } else {
-      Node(label(js), ch.map(fromJson(_)))
+    
+    
+    js match {
+      case children(ch) if (ch.length == 1 && score(ch.first) == 0) => Leaf(label(js), label(ch.first))
+      case children(ch) => Node(label(js), ch.map(fromJson(_)))
     }
   }
 }

@@ -13,7 +13,7 @@ import Js._
 class ParseStats extends Task {
   
   override def identifier = "stats"
-  override def version = "1"
+  override def version = "2"
   
   def run(params: Map[String, ExecutionProfile]): JsValue = {
     
@@ -25,7 +25,7 @@ class ParseStats extends Task {
                                              ('avg_children << (0 /: tree.nodes)(_ + _.children.length) / tree.nodes.length.asInstanceOf[Double] ) ::
                                              ('max_children << (0 /: tree.nodes) { (m, n) => Math.max(m, n.children.length) } ) ::
                                              ('number_of_nouns << tree.leaves.filter(isNoun(_)).length) ::
-                                             ('number_of_subjonctives << tree.nodes.filter(_.label.equals("IN"))) ::
+                                             ('number_of_subjonctives << tree.nodes.filter(_.label.equals("IN")).length) ::
                                              Nil
     
     (JsObject() /: stats) { (js: JsObject, stat:(JsValue => JsObject)) => stat(js) }

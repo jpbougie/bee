@@ -10,21 +10,17 @@ import Js._
 /* The strategy of this heuristic is to take each first-level separation as a different domain
  * and extract the nouns from it.
  */
-class FirstLevelSplit extends Task {
+class FirstLevelSplit extends SplittingTask {
   
   override def identifier = "firstlevelsplit"
-  override def version = "1"
+  override def version = "2"
   
-  def run(params: Map[String, ExecutionProfile]): JsValue = {
+  def split(tree: Tree): List[Part] = {
     
-    val tree = skipUniqueChild(Tree.fromJson(params("stanford").result.get), 2)
-    
-    val objects = tree match {
-      case Node(label, children) => children.map(findNouns(_)).toList
-      case Leaf(label, value) => (value :: Nil) :: Nil
+    skipUniqueChild(tree, 3) match {
+      case Node(label, children) => children.toList.map({ subtree => Part(subtree.leaves.map(_.value) mkString " ", findNouns(subtree).map("noun" -> _))})
+      case Leaf(label, value) => Part(value, ("noun" -> value) :: Nil) :: Nil
     }
-       
-    JsArray(objects.remove(_ isEmpty).map(l => { JsArray(l.map(JsString(_)).toList)}).toList)
   }
   
   /**
