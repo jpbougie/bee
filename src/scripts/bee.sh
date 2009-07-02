@@ -15,12 +15,11 @@ JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=221
 # add JMX_OPTS below if you want jmx support.
 JAVA_OPTS="-server -verbosegc -XX:+PrintGCDetails -XX:+UseConcMarkSweepGC -XX:+UseParNewGC $HEAP_OPTS"
 
-
-function running() {
+function running {
   $DAEMON $daemon_args --running
 }
 
-function find_java() {
+function find_java {
   if [ ! -z "$JAVA_HOME" ]; then
     return
   fi
