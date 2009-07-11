@@ -42,6 +42,13 @@ abstract case class Tree() {
       case Leaf(label, value) => Nil
     }
   }
+  
+  def all: List[Tree] = {
+    this :: (this match {
+      case Leaf(_, _) => Nil
+      case Node(_, children) => children.toList.flatMap(_.all)
+    })
+  }
 }
 case class Node(label: String, children: Seq[Tree]) extends Tree
 case class Leaf(label: String, value: String) extends Tree

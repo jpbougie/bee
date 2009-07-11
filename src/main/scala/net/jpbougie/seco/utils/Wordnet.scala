@@ -4,6 +4,8 @@ import scala.io.Source
 import scala.collection.immutable.{IntMap, Map, Set}
 import scala.util.matching.Regex
 
+import java.io.{File, RandomAccessFile}
+
 class WordnetParser(wordnetDir: String, domainsFile: String) {
   def parseIndex(pos: String): Map[String, List[Int]] = {
     /* Parse the noun index file from WordNet
@@ -20,6 +22,40 @@ class WordnetParser(wordnetDir: String, domainsFile: String) {
                                           (noun, elems.toList.takeRight(count).map(_ toInt))
                                         })
     Map.empty ++ new Iterable[(String, List[Int])] { def elements = iterIndex }
+  }
+  
+  def getEntry(pos: String, offset: Int): String = {
+    val handle = new RandomAccessFile(new File(this.wordnetDir + "/data." + pos), "r")
+    
+    handle.seek(offset)
+    
+    val line = handle.readLine
+    
+    handle.close
+    
+    line
+  }
+  
+  // returns the offset relationship
+  def getRelationFromEntry(line: String, relType: String): Option[Int] = {
+    val tokens = line.split(" ").toList
+    val wordCount = Integer.parseInt(tokens(3), 16)
+    val relationsCount = tokens(4 + 2 * wordCount).toInt // the relation count is after the words
+    
+    // each relationship has 4 elements:
+    // pointer_symbol  synset_offset  pos  source/target 
+    
+    val start = 5 + 2 * wordCount
+    val elements = for(i <- (start until (start + 4 * relationsCount) by 4).toList) yield tokens.slice(i, i + 3)
+    
+    elements.find { tuple => tuple(0).equals(relType)}.map(_(1).toInt)
+  }
+  
+  def getWordsFromEntry(line: String): List[String] = {
+    val tokens = line.split(" ").toList
+    val count = Integer.parseInt(tokens(3), 16)
+    
+    for(i <- (4 until (3 + 2 * count) by 2).toList) yield tokens(i)
   }
   
   def parseDomains(pos: Char): IntMap[Array[String]] = {
@@ -47,16 +83,22 @@ class WordnetParser(wordnetDir: String, domainsFile: String) {
   }
 }
 
-abstract case class PartOfSpeech() {
+abstract case class PartOfSpeech(parser: WordnetParser) {
   
   def synsets: Map[String, List[Int]]
   def domains: IntMap[Array[String]]
   def exceptions: Map[String, String]
   def detachmentRules: Map[Regex, String]
+  val pos: String
   
   // Returns the list of domains for each sense of a word
   def getDomains(word: String): List[List[String]] = {
-    
+    for(offset <- getSenses(word))
+      yield (for(domain <- this.domains(offset))
+        yield domain).toList
+  }
+  
+  def getSenses(word: String): List[Int] = {
     // get possible variations on a word, as a plural or a singular, and then sanitize them
     val words = ((word :: Nil) ++ this.getBaseForms(word)
                                       .filter(x => !(x equals word)))
@@ -64,8 +106,7 @@ abstract case class PartOfSpeech() {
     
     for(w <- words if this.synsets contains w; // for each variation that actually exists in the dictionary
         offset <- this.synsets(w)) // get the senses of the word
-        yield (for(domain <- this.domains(offset))
-          yield domain).toList
+        yield offset
   }
   
   def getBaseForms(word: String): List[String] = {
@@ -73,9 +114,18 @@ abstract case class PartOfSpeech() {
     detachmentRules.filter({case (pattern, _) => pattern.findFirstIn(word).isDefined })
                    .map({ case (pattern, value) => pattern.replaceFirstIn(word, value) })
   }
+  
+  def getTopics(word: String): List[List[String]] = {
+    for(offset <- getSenses(word))
+      yield {
+        val entry = parser.getEntry(pos, offset)
+        val topic = parser.getRelationFromEntry(entry, ";c")
+        topic.toList.flatMap { t => parser.getWordsFromEntry(parser.getEntry(pos, t))}
+      }
+  }
 }
 
-case class Noun(parser: WordnetParser) extends PartOfSpeech {
+case class Noun(override val parser: WordnetParser) extends PartOfSpeech(parser) {
   
   private val _synsets = parser.parseIndex("noun")
   override def synsets = _synsets
@@ -83,6 +133,8 @@ case class Noun(parser: WordnetParser) extends PartOfSpeech {
   override def domains = _domains
   private val _excs = parser.parseExceptions("noun")
   override def exceptions = _excs
+  
+  override val pos = "noun"
   
   override def detachmentRules = Map( new Regex("ses$")  -> "s"
                                     , new Regex("xes$")  -> "x"
@@ -95,13 +147,15 @@ case class Noun(parser: WordnetParser) extends PartOfSpeech {
                                     )
 }
 
-case class Verb(parser: WordnetParser) extends PartOfSpeech {
+case class Verb(override val parser: WordnetParser) extends PartOfSpeech(parser) {
   private val _synsets = parser.parseIndex("verb")
   override def synsets = _synsets
   private val _domains = parser.parseDomains('v')
   override def domains = _domains
   private val _excs = parser.parseExceptions("verb")
   override def exceptions = _excs
+  
+  override val pos = "verb"
   
   override def detachmentRules = Map( new Regex("ies$") -> "y"
                                     , new Regex("es$")  -> "e"

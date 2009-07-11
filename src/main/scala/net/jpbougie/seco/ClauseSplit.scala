@@ -5,32 +5,35 @@ package net.jpbougie.seco
 class ClauseSplit extends SplittingTask {
   
   override def identifier = "clausesplit"
-  override def version = "1"
+  override def version = "4"
   
-  def split(tree: Tree): List[Part] = {
-    val interesting = List("S", "SQ")
-    tree match {
-      case Leaf(label, value) => Nil
-      case Node(label, children) if interesting.contains(label) => {
-        val (before, after) = children.toList.break({
-          case Node(label, children) => interesting.contains(label)
+  val interesting = List("S", "SQ", "FRAG")
+  
+  private def recurse(elems: List[Tree]): List[Part] = {
+    
+    elems match {
+      case Nil => Nil
+      case x => {
+        val (before, after) = elems.break {
+          case Node(label, _) => interesting.contains(label)
           case _ => false
-        })
+        }
+
+        val phrase = before.filter(_.isInstanceOf[Leaf]).map { case Leaf(_, value) => value }.mkString(" ")
         
-        var phrase = before.flatMap { subtree => subtree.leaves.map(_.value) }
-        
-        Part(phrase.mkString(" "), extractInteresting(before.toList)) :: after.toList.flatMap(split(_))
+        Part(phrase, extractInteresting(before.toList)) :: recurse(after match { case (x :: rest) => rest; case _ => after})
       }
-      
-      case Node(label, children) => children.toList flatMap { child => split(child) }
     }
   }
   
+  def split(tree: Tree): List[Part] = {
+    recurse(tree.all.dropWhile { case Node(label, _) => !interesting.contains(label); case Leaf(_,_) => true }.tail)
+  }
+  
   def extractInteresting(children: List[Tree]): List[(String, String)] = {
-    children flatMap {
+    children.filter(_.isInstanceOf[Leaf]) flatMap {
       case Leaf(label, value) if label.startsWith("NN") => ("noun" -> value) :: Nil
       case Leaf(label, value) if label.startsWith("VB") => ("verb" -> value) :: Nil
-      case Node(label, children) => extractInteresting(children.toList)
       case _ => Nil
     }
   }
