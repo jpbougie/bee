@@ -27,7 +27,10 @@ class ClauseSplit extends SplittingTask {
   }
   
   def split(tree: Tree): List[Part] = {
-    recurse(tree.all.dropWhile { case Node(label, _) => !interesting.contains(label); case Leaf(_,_) => true }.tail)
+    recurse(tree.all.dropWhile { case Node(label, _) => !interesting.contains(label); case Leaf(_,_) => true } match {
+      case (x :: rest) => rest
+      case Nil => tree.all
+    })
   }
   
   def extractInteresting(children: List[Tree]): List[(String, String)] = {
